@@ -1,0 +1,17 @@
+services:
+  sync-backend:
+    build: .
+    container_name: sync-backend
+    env_file:
+      - .env
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - sync-net
+    restart: unless-stopped
+
+networks:
+  sync-net:
+    external: true

@@ -1,0 +1,40 @@
+{
+  "instanceType": "development",
+  "server": {
+    "host": "localhost",
+    "port": 5000,
+    "corsWhiteList": ["localhost"]
+  },
+  "database": {
+    "mongo": {
+      "url": "mongo-url",
+      "username": "username",
+      "password": "password",
+      "collections": {
+        "users": "userscollection-name"
+      }
+    },
+    "postgres": {
+      "host": "localhost",
+      "port": 5432,
+      "user": "postgres",
+      "database": "scholar_snap",
+      "ssl": false
+    },
+    "redis": {
+      "host": "localhost",
+      "port": 6379
+    }
+  },
+  "kafka": {
+    "clientId": "app_name",
+    "brokers": ["localhost:9092"],
+    "topics": {
+      "health": "health-topic"
+    },
+    "groupIds": {
+      "healh": "health-group"
+    }
+  },
+  "synced_folder_root_path": "/home"
+}

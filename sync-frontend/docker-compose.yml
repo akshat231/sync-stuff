@@ -1,0 +1,15 @@
+services:
+  sync-frontend:
+    build:
+      context: .
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
+        VITE_SYNCTHING_API_KEY: ${VITE_SYNCTHING_API_KEY}
+    env_file:
+      - .env
+    container_name: sync-frontend
+    ports:
+      - "3000:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

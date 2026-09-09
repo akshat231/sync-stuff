@@ -1,0 +1,14 @@
+services:
+  syncthing-server:
+    image: syncthing/syncthing:latest
+    container_name: syncthing-server
+    hostname: syncthing-server
+    ports:
+      - "${SYNCTHING_GUI_PORT}:8384"
+      - "${SYNCTHING_SYNC_TCP_PORT}:22000/tcp"
+      - "${SYNCTHING_SYNC_UDP_PORT}:22000/udp"
+      - "${SYNCTHING_DISCOVERY_PORT}:21027/udp"
+    volumes:
+      - ./config:/var/syncthing/config
+      - ${SYNCHED_FOLDER_ROOT}:/var/syncthing
+    restart: unless-stopped
