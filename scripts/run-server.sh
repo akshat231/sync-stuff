@@ -43,6 +43,9 @@ chown -R 1000:1000 "$CONFIG_DIR"
 # ── bring up containers ───────────────────────────────────────────────
 docker compose -f "$SERVER_DIR/docker-compose.yml" --env-file "$SERVER_DIR/.env" up -d
 
+# Put syncthing-server on the shared network so the backend can reach it
+docker network connect sync-net syncthing-server 2>/dev/null || true
+
 # Let Syncthing generate its own config.xml, then patch the API key in
 echo -n "Waiting for Syncthing to generate config..."
 for _ in $(seq 1 30); do
