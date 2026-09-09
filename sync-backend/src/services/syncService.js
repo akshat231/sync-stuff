@@ -30,7 +30,7 @@ const connect = async (token, deviceId) => {
         logger.info(`Synced folder created: ${userFolder}`);
 
         const syncthingUrl = process.env.SYNCTHING_URL;
-        const syncthingApiKey = confprocess.env.SYNCTHING_API_KEY;
+        const syncthingApiKey = process.env.SYNCTHING_API_KEY;
 
         const folderId = `user-${email}`;
         await axios.post(

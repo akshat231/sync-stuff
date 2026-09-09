@@ -1,31 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  connectDevice,
-  fetchSyncthingDeviceId,
-  fetchSyncthingFolders,
-} from '../api/syncService';
+import { connectDevice, fetchSyncthingDeviceId } from '../api/syncService';
 
 const Connect = () => {
   const [deviceId, setDeviceId] = useState('');
-  const [folders, setFolders] = useState([]);
-  const [selectedFolderId, setSelectedFolderId] = useState('');
+  const [folderName, setFolderName] = useState('');
+  const [fileCount, setFileCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(null);
+  const folderInputRef = useRef(null);
   const navigate = useNavigate();
 
   const loadSyncthingInfo = async () => {
     setLoading(true);
     setError('');
     try {
-      const [id, folderList] = await Promise.all([
-        fetchSyncthingDeviceId(),
-        fetchSyncthingFolders(),
-      ]);
+      const id = await fetchSyncthingDeviceId();
       setDeviceId(id);
-      setFolders(Array.isArray(folderList) ? folderList : []);
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -40,9 +33,44 @@ const Connect = () => {
     loadSyncthingInfo();
   }, []);
 
-  const selectedFolder = folders.find(
-    (folder) => folder.id === selectedFolderId
-  );
+  const pickFolder = async () => {
+    try {
+      if (window.showDirectoryPicker) {
+        const handle = await window.showDirectoryPicker();
+        setFolderName(handle.name);
+        setFileCount(0);
+        setError('');
+      } else {
+        folderInputRef.current?.click();
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+      setError('Folder picker not supported in this browser');
+    }
+  };
+
+  const handleFolderPicked = (event) => {
+    const input = event.target;
+    const files = Array.from(input.files || []);
+    let name = '';
+
+    if (files.length > 0) {
+      const firstPath = files[0].webkitRelativePath || files[0].name;
+      name = firstPath.split('/')[0];
+    } else {
+      const fakePath = input.value || '';
+      const parts = fakePath.split(/[\\/]/);
+      name = parts[parts.length - 1];
+    }
+
+    if (!name) return;
+
+    setFolderName(name);
+    setFileCount(files.length);
+    setError('');
+
+    event.target.value = '';
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -90,34 +118,36 @@ const Connect = () => {
 
             <form onSubmit={handleSubmit}>
               <div className="form-group">
-                <label htmlFor="folder">Folder to sync</label>
-                {folders.length === 0 ? (
-                  <p className="text-secondary">
-                    No folders configured on this Syncthing. Add one in the
-                    Syncthing web UI first.
+                <label>Folder to sync</label>
+                <input
+                  ref={folderInputRef}
+                  type="file"
+                  webkitdirectory=""
+                  directory=""
+                  style={{ display: 'none' }}
+                  onChange={handleFolderPicked}
+                />
+                <button
+                  type="button"
+                  onClick={pickFolder}
+                  className="btn btn-secondary"
+                >
+                  Pick folder from computer
+                </button>
+                {folderName && (
+                  <p className="folder-picked">
+                    <strong>{folderName}</strong>
+                    {fileCount > 0 && ` — ${fileCount} files detected`}
                   </p>
-                ) : (
-                  <select
-                    id="folder"
-                    value={selectedFolderId}
-                    onChange={(e) => setSelectedFolderId(e.target.value)}
-                    required
-                  >
-                    <option value="" disabled>
-                      Select a folder...
-                    </option>
-                    {folders.map((folder) => (
-                      <option key={folder.id} value={folder.id}>
-                        {folder.label || folder.id} ({folder.path})
-                      </option>
-                    ))}
-                  </select>
                 )}
+                <p className="text-secondary">
+                  Tip: choose the folder already shared by client Syncthing.
+                </p>
               </div>
 
               <button
                 type="submit"
-                disabled={!deviceId || !selectedFolderId || submitting}
+                disabled={!deviceId || !folderName || submitting}
                 className="btn btn-primary"
               >
                 {submitting ? 'Connecting...' : 'Connect'}
@@ -129,9 +159,7 @@ const Connect = () => {
             <h3>Device Connected!</h3>
             <p>Email: {success.data?.email}</p>
             <p>Device ID: {success.data?.deviceId}</p>
-            <p>Folder ID: {success.data?.folderId}</p>
-            <p>Server path: {success.data?.path}</p>
-            {selectedFolder && <p>Client folder: {selectedFolder.path}</p>}
+            <p>Folder: {folderName}</p>
             <button
               onClick={() => navigate('/dashboard')}
               className="btn btn-primary"
