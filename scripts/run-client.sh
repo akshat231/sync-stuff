@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Creates the full CLIENT stack from scratch: generates API key, writes
-# .env into sync-client/, updates sync-frontend/.env, and brings up
-# client Syncthing + frontend.
+# Creates the full CLIENT stack: generates API key, writes .env into
+# sync-client/, updates sync-frontend/.env, brings up syncthing-client,
+# then starts the frontend dev server.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,7 +37,7 @@ CONFIG_DIR="$CLIENT_DIR/config"
 mkdir -p "$CONFIG_DIR"
 chown -R 1000:1000 "$CONFIG_DIR"
 
-# ── bring up containers ───────────────────────────────────────────────
+# ── bring up syncthing-client ─────────────────────────────────────────
 docker compose -f "$CLIENT_DIR/docker-compose.yml" --env-file "$CLIENT_DIR/.env" up -d
 
 # Let Syncthing generate its own config.xml, then patch the API key in
@@ -58,6 +58,12 @@ else
   echo "WARNING: config.xml not found — API key not patched."
 fi
 
-docker compose -f "$FRONTEND_DIR/docker-compose.yml" up -d --build
+# ── install deps if needed, then start frontend ───────────────────────
+if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
+  echo "Installing frontend dependencies..."
+  (cd "$FRONTEND_DIR" && npm install)
+fi
 
-echo "Client stack is running (Syncthing + frontend)."
+echo ""
+echo "Starting frontend dev server..."
+(cd "$FRONTEND_DIR" && npm run dev)
