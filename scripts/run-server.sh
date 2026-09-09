@@ -35,11 +35,15 @@ echo "Updated $BACKEND_ENV with server API key"
 # ── shared network for backend ────────────────────────────────────────
 docker network inspect sync-net >/dev/null 2>&1 || docker network create sync-net
 
+# ── fix ownership (script runs as root via sudo, syncthing runs as UID 1000)
+CONFIG_DIR="$SERVER_DIR/config"
+mkdir -p "$CONFIG_DIR"
+chown -R 1000:1000 "$CONFIG_DIR"
+
 # ── bring up containers ───────────────────────────────────────────────
 docker compose -f "$SERVER_DIR/docker-compose.yml" --env-file "$SERVER_DIR/.env" up -d
 
 # Let Syncthing generate its own config.xml, then patch the API key in
-CONFIG_DIR="$SERVER_DIR/config"
 echo -n "Waiting for Syncthing to generate config..."
 for _ in $(seq 1 30); do
   [ -f "$CONFIG_DIR/config.xml" ] && break
@@ -50,6 +54,7 @@ echo ""
 
 if [ -f "$CONFIG_DIR/config.xml" ]; then
   sed -i "s|<apikey>.*</apikey>|<apikey>${KEY}</apikey>|" "$CONFIG_DIR/config.xml"
+  chown -R 1000:1000 "$CONFIG_DIR"
   docker compose -f "$SERVER_DIR/docker-compose.yml" --env-file "$SERVER_DIR/.env" restart
   echo "Patched API key into config.xml and restarted Syncthing."
 else
