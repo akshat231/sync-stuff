@@ -27,6 +27,9 @@ const connect = async (token, deviceId) => {
             recursive: true
         });
 
+        // Syncthing runs as UID 1000; without this it can't write into the folder
+        await fs.chown(userFolder, 1000, 1000);
+
         logger.info(`Synced folder created: ${userFolder}`);
 
         const syncthingUrl = process.env.SYNCTHING_URL;

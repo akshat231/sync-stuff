@@ -8,6 +8,7 @@ services:
       - "5000:5000"
     volumes:
       - ./logs:/app/logs
+      - /var/syncthing:/var/syncthing
     networks:
       - sync-net
     restart: unless-stopped

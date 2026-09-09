@@ -36,5 +36,5 @@
       "healh": "health-group"
     }
   },
-  "synced_folder_root_path": "/home"
+  "synced_folder_root_path": "/var/syncthing"
 }
