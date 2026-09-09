@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Creates the full CLIENT stack from scratch: generates API key, writes
-# .env and config.xml into sync-client/, updates sync-frontend/.env,
-# and brings up client Syncthing + frontend.
+# .env into sync-client/, updates sync-frontend/.env, and brings up
+# client Syncthing + frontend.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,27 +23,7 @@ SYNCHED_FOLDER_ROOT=/var/syncthing
 EOF
 echo "Wrote $CLIENT_DIR/.env"
 
-# ── sync-client/config/config.xml ─────────────────────────────────────
-mkdir -p "$CLIENT_DIR/config"
-cat > "$CLIENT_DIR/config/config.xml" <<EOF
-<configuration version="28">
-    <folder id="default" label="Default" path="/var/syncthing" type="sendreceive" rescanIntervalS="3600" fsWatcherEnabled="true" fsWatcherDelayS="10" ignorePerms="false" autoNormalize="true">
-    </folder>
-    <gui enabled="true" tls="false" debugging="false">
-        <address>0.0.0.0:8384</address>
-        <apikey>${KEY}</apikey>
-        <theme>default</theme>
-    </gui>
-    <options>
-        <listenAddress>default</listenAddress>
-        <globalAnnounceEnabled>false</globalAnnounceEnabled>
-        <natEnabled>false</natEnabled>
-    </options>
-</configuration>
-EOF
-echo "Wrote $CLIENT_DIR/config/config.xml"
-
-# ── sync-frontend/.env (client API key) ───────────────────────────────
+# ── frontend .env keys ────────────────────────────────────────────────
 FRONTEND_ENV="$FRONTEND_DIR/.env"
 if [ -f "$FRONTEND_ENV" ] && grep -q "^VITE_SYNCTHING_API_KEY=" "$FRONTEND_ENV"; then
   sed -i "s|^VITE_SYNCTHING_API_KEY=.*|VITE_SYNCTHING_API_KEY=${KEY}|" "$FRONTEND_ENV"
@@ -54,6 +34,25 @@ echo "Updated $FRONTEND_ENV with client API key"
 
 # ── bring up containers ───────────────────────────────────────────────
 docker compose -f "$CLIENT_DIR/docker-compose.yml" --env-file "$CLIENT_DIR/.env" up -d
+
+# Let Syncthing generate its own config.xml, then patch the API key in
+CONFIG_DIR="$CLIENT_DIR/config"
+echo -n "Waiting for Syncthing to generate config..."
+for _ in $(seq 1 30); do
+  [ -f "$CONFIG_DIR/config.xml" ] && break
+  echo -n "."
+  sleep 1
+done
+echo ""
+
+if [ -f "$CONFIG_DIR/config.xml" ]; then
+  sed -i "s|<apikey>.*</apikey>|<apikey>${KEY}</apikey>|" "$CONFIG_DIR/config.xml"
+  docker compose -f "$CLIENT_DIR/docker-compose.yml" --env-file "$CLIENT_DIR/.env" restart
+  echo "Patched API key into config.xml and restarted Syncthing."
+else
+  echo "WARNING: config.xml not found — API key not patched."
+fi
+
 docker compose -f "$FRONTEND_DIR/docker-compose.yml" up -d --build
 
 echo "Client stack is running (Syncthing + frontend)."
