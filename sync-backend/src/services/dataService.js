@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs/promises');
+const { createReadStream } = require('fs');
 const mime = require('mime-types');
 const config = require('config');
 const logger = require('../utilities/logger')
@@ -80,7 +81,9 @@ const playFile = async (token, fileName, req, res) => {
             });
         }
 
-        if (!fs.existsSync(filePath)) {
+        try {
+            await fs.access(filePath);
+        } catch {
             logger.warn(
                 `Media file not found for user ${email}: ${fileName}`
             );
@@ -91,7 +94,7 @@ const playFile = async (token, fileName, req, res) => {
             });
         }
 
-        const stat = fs.statSync(filePath);
+        const stat = await fs.stat(filePath);
         const fileSize = stat.size;
 
         const contentType =
@@ -115,7 +118,7 @@ const playFile = async (token, fileName, req, res) => {
                 'Accept-Ranges': 'bytes'
             });
 
-            return fs.createReadStream(filePath).pipe(res);
+            return createReadStream(filePath).pipe(res);
         }
 
         logger.info(
@@ -158,7 +161,7 @@ const playFile = async (token, fileName, req, res) => {
             'Content-Type': contentType
         });
 
-        fs.createReadStream(filePath, {
+        createReadStream(filePath, {
             start,
             end
         }).pipe(res);
