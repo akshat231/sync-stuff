@@ -36,6 +36,35 @@ const connect = async (token, deviceId) => {
         const syncthingApiKey = process.env.SYNCTHING_API_KEY;
 
         const folderId = `user-${email}`;
+
+        const deviceHeaders = {
+            'X-API-Key': syncthingApiKey,
+            'Content-Type': 'application/json'
+        };
+
+        const devicesRes = await axios.get(
+            `${syncthingUrl}/rest/config/devices`,
+            { headers: { 'X-API-Key': syncthingApiKey } }
+        );
+        const knownDevices = Array.isArray(devicesRes.data)
+            ? devicesRes.data
+            : devicesRes.data?.devices || [];
+        const deviceKnown = knownDevices.some(
+            (d) => d.deviceID === deviceId
+        );
+
+        if (!deviceKnown) {
+            await axios.post(
+                `${syncthingUrl}/rest/config/devices`,
+                {
+                    deviceID: deviceId,
+                    name: email
+                },
+                { headers: deviceHeaders }
+            );
+            logger.info(`Client device added to server config: ${deviceId}`);
+        }
+
         await axios.post(
             `${syncthingUrl}/rest/config/folders`,
             {
@@ -50,10 +79,7 @@ const connect = async (token, deviceId) => {
                 ]
             },
             {
-                headers: {
-                    'X-API-Key': syncthingApiKey,
-                    'Content-Type': 'application/json'
-                }
+                headers: deviceHeaders
             }
         );
         logger.info(

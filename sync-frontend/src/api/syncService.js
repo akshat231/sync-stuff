@@ -36,17 +36,49 @@ export const configureClientSyncthing = async (
   folderId,
   folderPath
 ) => {
-  await syncthingClient.post('/rest/config/devices', {
-    deviceID: serverDeviceId,
-    name: 'sync-server',
-    autoAcceptFolders: true,
-  });
+  const { data: devicesRes } = await syncthingClient.get('/rest/config/devices');
+  const devices = Array.isArray(devicesRes)
+    ? devicesRes
+    : devicesRes?.devices || [];
+  const exists = devices.some((d) => d.deviceID === serverDeviceId);
+
+  let addresses = undefined;
+  try {
+    const { hostname } = new URL(
+      import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    );
+    addresses = [`tcp://${hostname}:22000`];
+  } catch {
+    addresses = undefined;
+  }
+
+  if (exists) {
+    if (addresses) {
+      try {
+        await syncthingClient.patch(
+          `/rest/config/devices/${serverDeviceId}`,
+          { addresses }
+        );
+      } catch {
+        // version may not support patch; dynamic discovery still applies
+      }
+    }
+  } else {
+    await syncthingClient.post('/rest/config/devices', {
+      deviceID: serverDeviceId,
+      name: 'sync-server',
+      addresses: addresses || [],
+      paused: false,
+      autoAcceptFolders: true,
+    });
+  }
+
   await syncthingClient.post('/rest/config/folders', {
     id: folderId,
     label: folderId,
     path: folderPath,
     type: 'sendreceive',
-    devices: [serverDeviceId],
+    devices: [{ deviceID: serverDeviceId }],
     fsWatcherEnabled: true,
   });
 };

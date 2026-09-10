@@ -16,9 +16,26 @@ echo "Generated client API key: ${KEY}"
 # ── controlled sync-root (host) ─────────────────────────────────────
 # One parent dir is mounted into the container as /sync. The frontend lets
 # the user pick any folder UNDER this root and translates the path for
-# Syncthing (host /<root>/<rel>  ->  container /sync/<rel>).
+# Syncthing (host /<root>/<rel>  ->  container /sync/<rel>). Prefer a
+# previously persisted value (from sync-client/.env) over the default.
+if [ -z "${CLIENT_SYNC_ROOT_HOST:-}" ] && [ -f "$CLIENT_DIR/.env" ] && grep -q '^CLIENT_SYNC_ROOT_HOST=' "$CLIENT_DIR/.env"; then
+  CLIENT_SYNC_ROOT_HOST="$(sed -n 's|^CLIENT_SYNC_ROOT_HOST=||p' "$CLIENT_DIR/.env" | head -1)"
+fi
+if [ -z "${CLIENT_SYNC_ROOT_HOST:-}" ] && [ -f "$FRONTEND_DIR/.env" ] && grep -q '^VITE_SYNC_ROOT_HOST=' "$FRONTEND_DIR/.env"; then
+  CLIENT_SYNC_ROOT_HOST="$(sed -n 's|^VITE_SYNC_ROOT_HOST=||p' "$FRONTEND_DIR/.env" | head -1)"
+fi
 SYNC_ROOT_HOST="${CLIENT_SYNC_ROOT_HOST:-$CLIENT_DIR/data}"
 mkdir -p "$SYNC_ROOT_HOST"
+case "$SYNC_ROOT_HOST" in
+  "$ROOT_DIR"/*)
+    chown -R 1000:1000 "$SYNC_ROOT_HOST";;
+  *)
+    OWNER="$(stat -c %u "$SYNC_ROOT_HOST" 2>/dev/null || echo '?')"
+    if [ "$OWNER" != "1000" ]; then
+      echo "NOTE: sync root $SYNC_ROOT_HOST is owned by UID $OWNER (not 1000)."
+      echo "      If Syncthing cannot write to picked folders, chown it: sudo chown -R 1000:1000 $SYNC_ROOT_HOST"
+    fi;;
+esac
 
 # ── sync-client/.env ──────────────────────────────────────────────────
 cat > "$CLIENT_DIR/.env" <<EOF
@@ -39,6 +56,10 @@ upsert_env() {
   if [ -f "$file" ] && grep -q "^${key}=" "$file"; then
     sed -i "s|^${key}=.*|${key}=${esc}|" "$file"
   else
+    # append on a fresh line even if the file doesn't end with a newline
+    if [ -s "$file" ] && [ -n "$(tail -c1 "$file")" ]; then
+      printf '\n' >> "$file"
+    fi
     printf '%s=%s\n' "$key" "$value" >> "$file"
   fi
 }
@@ -54,7 +75,6 @@ echo "Updated $FRONTEND_ENV with client API key + sync-root mapping"
 CONFIG_DIR="$CLIENT_DIR/config"
 mkdir -p "$CONFIG_DIR"
 chown -R 1000:1000 "$CONFIG_DIR"
-chown -R 1000:1000 "$SYNC_ROOT_HOST"
 
 # ── bring up syncthing-client ─────────────────────────────────────────
 docker compose -f "$CLIENT_DIR/docker-compose.yml" --env-file "$CLIENT_DIR/.env" up -d

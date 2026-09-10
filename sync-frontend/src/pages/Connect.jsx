@@ -39,6 +39,8 @@ const Connect = () => {
     loadSyncthingInfo();
   }, []);
 
+  const syncRootHost = import.meta.env.VITE_SYNC_ROOT_HOST || '';
+
   const pickFolder = async () => {
     try {
       if (window.showDirectoryPicker) {
@@ -46,6 +48,7 @@ const Connect = () => {
         setFolderName(handle.name);
         setFileCount(0);
         setError('');
+        if (syncRootHost) setHostPath(`${syncRootHost}/${handle.name}`);
       } else {
         folderInputRef.current?.click();
       }
@@ -74,9 +77,16 @@ const Connect = () => {
     setFolderName(name);
     setFileCount(files.length);
     setError('');
+    if (syncRootHost) setHostPath(`${syncRootHost}/${name}`);
 
     event.target.value = '';
   };
+
+  const getErrorMessage = (err) =>
+    err?.response?.data?.error ||
+    err?.response?.data?.message ||
+    err?.message ||
+    'Something went wrong';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -101,7 +111,7 @@ const Connect = () => {
 
       setSuccess(response);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to connect device');
+      setError(getErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
