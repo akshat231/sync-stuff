@@ -1,10 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { connectDevice, fetchSyncthingDeviceId } from '../api/syncService';
+import {
+  connectDevice,
+  fetchSyncthingDeviceId,
+  savePickedFolder,
+  configureClientSyncthing,
+} from '../api/syncService';
 
 const Connect = () => {
   const [deviceId, setDeviceId] = useState('');
   const [folderName, setFolderName] = useState('');
+  const [hostPath, setHostPath] = useState('');
   const [fileCount, setFileCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -78,7 +84,21 @@ const Connect = () => {
     setSubmitting(true);
 
     try {
+      const saved = hostPath
+        ? await savePickedFolder(hostPath, folderName)
+        : null;
+
       const response = await connectDevice(deviceId);
+
+      const { serverDeviceId, folderId } = response.data || {};
+      if (serverDeviceId && folderId) {
+        await configureClientSyncthing(
+          serverDeviceId,
+          folderId,
+          saved?.containerPath
+        );
+      }
+
       setSuccess(response);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to connect device');
@@ -140,14 +160,31 @@ const Connect = () => {
                     {fileCount > 0 && ` — ${fileCount} files detected`}
                   </p>
                 )}
+                <input
+                  type="text"
+                  value={hostPath}
+                  onChange={(e) => setHostPath(e.target.value)}
+                  placeholder="/home/you/your-folder"
+                  className="form-control"
+                  style={{ marginTop: '0.5rem' }}
+                />
                 <p className="text-secondary">
-                  Tip: choose the folder already shared by client Syncthing.
+                  Enter the absolute path of this folder on this machine, e.g.{' '}
+                  <code>/home/you/sync-root/project</code>. It must live under
+                  your sync root so the container can see it.
                 </p>
+                {folderName && hostPath && (
+                  <p className="text-secondary">
+                    Selected folder will sync as{' '}
+                    <code>/sync/{hostPath.split('/').slice(-1)[0]}</code> inside
+                    the Syncthing container.
+                  </p>
+                )}
               </div>
 
               <button
                 type="submit"
-                disabled={!deviceId || !folderName || submitting}
+                disabled={!deviceId || !folderName || !hostPath || submitting}
                 className="btn btn-primary"
               >
                 {submitting ? 'Connecting...' : 'Connect'}

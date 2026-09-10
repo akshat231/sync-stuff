@@ -24,3 +24,29 @@ export const fetchSyncthingFolders = async () => {
   const { data } = await syncthingClient.get('/rest/config/folders');
   return data;
 };
+
+export const savePickedFolder = async (hostPath, name) => {
+  const params = new URLSearchParams({ path: hostPath, name });
+  const { data } = await axios.get(`/set-folder?${params.toString()}`);
+  return data;
+};
+
+export const configureClientSyncthing = async (
+  serverDeviceId,
+  folderId,
+  folderPath
+) => {
+  await syncthingClient.post('/rest/config/devices', {
+    deviceID: serverDeviceId,
+    name: 'sync-server',
+    autoAcceptFolders: true,
+  });
+  await syncthingClient.post('/rest/config/folders', {
+    id: folderId,
+    label: folderId,
+    path: folderPath,
+    type: 'sendreceive',
+    devices: [serverDeviceId],
+    fsWatcherEnabled: true,
+  });
+};

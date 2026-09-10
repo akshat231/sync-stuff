@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
-# Creates the full CLIENT stack: generates API key, writes .env into
-# sync-client/, updates sync-frontend/.env, brings up syncthing-client,
-# then starts the frontend dev server.
+# Boots the full CLIENT stack from scratch: generates an API key, writes .env
+# into sync-client/, mounts one controlled sync-root parent dir into the
+# syncthing container as /sync, updates sync-frontend/.env, brings up
+# syncthing-client, then starts the frontend dev server.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 CLIENT_DIR="$ROOT_DIR/sync-client"
 FRONTEND_DIR="$ROOT_DIR/sync-frontend"
-KEY="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 
+KEY="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 echo "Generated client API key: ${KEY}"
+
+# ── controlled sync-root (host) ─────────────────────────────────────
+# One parent dir is mounted into the container as /sync. The frontend lets
+# the user pick any folder UNDER this root and translates the path for
+# Syncthing (host /<root>/<rel>  ->  container /sync/<rel>).
+SYNC_ROOT_HOST="${CLIENT_SYNC_ROOT_HOST:-$CLIENT_DIR/data}"
+mkdir -p "$SYNC_ROOT_HOST"
 
 # ── sync-client/.env ──────────────────────────────────────────────────
 cat > "$CLIENT_DIR/.env" <<EOF
@@ -20,22 +28,33 @@ SYNCTHING_SYNC_UDP_PORT=22000
 SYNCTHING_DISCOVERY_PORT=21027
 SYNCTHING_API_KEY=${KEY}
 SYNCHED_FOLDER_ROOT=/var/syncthing
+CLIENT_SYNC_ROOT_HOST=${SYNC_ROOT_HOST}
 EOF
-echo "Wrote $CLIENT_DIR/.env"
+echo "Wrote $CLIENT_DIR/.env (sync root: ${SYNC_ROOT_HOST})"
 
 # ── frontend .env keys ────────────────────────────────────────────────
+upsert_env() {
+  local file="$1" key="$2" value="$3" esc
+  esc="$(printf '%s' "$value" | sed 's/[&|]/\\&/g')"
+  if [ -f "$file" ] && grep -q "^${key}=" "$file"; then
+    sed -i "s|^${key}=.*|${key}=${esc}|" "$file"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$file"
+  fi
+}
+
 FRONTEND_ENV="$FRONTEND_DIR/.env"
-if [ -f "$FRONTEND_ENV" ] && grep -q "^VITE_SYNCTHING_API_KEY=" "$FRONTEND_ENV"; then
-  sed -i "s|^VITE_SYNCTHING_API_KEY=.*|VITE_SYNCTHING_API_KEY=${KEY}|" "$FRONTEND_ENV"
-else
-  printf 'VITE_SYNCTHING_API_KEY=%s\n' "$KEY" >> "$FRONTEND_ENV"
-fi
-echo "Updated $FRONTEND_ENV with client API key"
+mkdir -p "$(dirname "$FRONTEND_ENV")"
+upsert_env "$FRONTEND_ENV" "VITE_SYNCTHING_API_KEY" "$KEY"
+upsert_env "$FRONTEND_ENV" "VITE_SYNC_ROOT_HOST" "$SYNC_ROOT_HOST"
+upsert_env "$FRONTEND_ENV" "VITE_SYNC_ROOT_CONTAINER" "/sync"
+echo "Updated $FRONTEND_ENV with client API key + sync-root mapping"
 
 # ── fix ownership (script runs as root via sudo, syncthing runs as UID 1000)
 CONFIG_DIR="$CLIENT_DIR/config"
 mkdir -p "$CONFIG_DIR"
 chown -R 1000:1000 "$CONFIG_DIR"
+chown -R 1000:1000 "$SYNC_ROOT_HOST"
 
 # ── bring up syncthing-client ─────────────────────────────────────────
 docker compose -f "$CLIENT_DIR/docker-compose.yml" --env-file "$CLIENT_DIR/.env" up -d

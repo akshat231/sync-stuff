@@ -60,10 +60,21 @@ const connect = async (token, deviceId) => {
             `Syncthing folder configured for ${email} with device ${deviceId}`
         );
 
+        const statusRes = await axios.get(
+            `${syncthingUrl}/rest/system/status`,
+            {
+                headers: {
+                    'X-API-Key': syncthingApiKey
+                }
+            }
+        );
+        const serverDeviceId = statusRes.data?.myID;
+
         return {
             data: {
                 email,
                 deviceId,
+                serverDeviceId,
                 folderId,
                 path: userFolder
             },

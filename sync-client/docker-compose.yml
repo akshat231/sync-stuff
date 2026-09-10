@@ -11,4 +11,5 @@ services:
     volumes:
       - ./config:/var/syncthing/config
       - ${SYNCHED_FOLDER_ROOT}:/var/syncthing
+      - ${CLIENT_SYNC_ROOT_HOST:-./data}:/sync
     restart: unless-stopped
